@@ -303,6 +303,22 @@ async def debug_fuel_entries():
         print("🔍 Debug: Fetching all fuel entries...")
         fuel_entries = await FuelEntry.find_all().to_list()
         
+        # First, let's see what drivers exist
+        print("🔍 Debug: Checking what drivers exist...")
+        all_drivers = await Driver.find_all().to_list()
+        print(f"🔍 Debug: Found {len(all_drivers)} drivers:")
+        for driver in all_drivers:
+            print(f"  - Driver ID: {driver.id}, User ID: {driver.user_id}")
+        
+        # Get unique driver IDs from fuel entries
+        fuel_driver_ids = set([entry.driver_id for entry in fuel_entries])
+        print(f"🔍 Debug: Fuel entries reference these driver IDs: {fuel_driver_ids}")
+        
+        # Check which driver IDs exist
+        existing_driver_ids = set([driver.id for driver in all_drivers])
+        missing_driver_ids = fuel_driver_ids - existing_driver_ids
+        print(f"🔍 Debug: Missing driver IDs: {missing_driver_ids}")
+        
         # Get driver info for each fuel entry
         fuel_list = []
         for entry in fuel_entries:
@@ -337,6 +353,60 @@ async def debug_fuel_entries():
         return {"status": "success", "fuel_entries": fuel_list}
     except Exception as e:
         print(f"❌ Debug: Error fetching fuel entries: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/debug/fix-fuel-entries")
+async def fix_fuel_entries():
+    """Fix fuel entries by assigning them to valid drivers"""
+    try:
+        print("🔧 Debug: Starting fuel entries fix...")
+        
+        # Get all drivers
+        all_drivers = await Driver.find_all().to_list()
+        if not all_drivers:
+            return {"status": "error", "message": "No drivers found in database"}
+        
+        # Get all fuel entries
+        fuel_entries = await FuelEntry.find_all().to_list()
+        if not fuel_entries:
+            return {"status": "error", "message": "No fuel entries found"}
+        
+        print(f"🔧 Debug: Found {len(all_drivers)} drivers and {len(fuel_entries)} fuel entries")
+        
+        # Get the first driver ID to use as default
+        default_driver_id = all_drivers[0].id
+        print(f"🔧 Debug: Using default driver ID: {default_driver_id}")
+        
+        # Fix each fuel entry
+        fixed_count = 0
+        for entry in fuel_entries:
+            try:
+                # Check if the current driver_id exists
+                driver_exists = await Driver.find_one({"_id": entry.driver_id})
+                
+                if not driver_exists:
+                    print(f"🔧 Debug: Fixing fuel entry {entry.id} - assigning to driver {default_driver_id}")
+                    # Update the fuel entry with a valid driver ID
+                    entry.driver_id = default_driver_id
+                    await entry.save()
+                    fixed_count += 1
+                else:
+                    print(f"🔧 Debug: Fuel entry {entry.id} already has valid driver {entry.driver_id}")
+                    
+            except Exception as e:
+                print(f"❌ Error fixing fuel entry {entry.id}: {e}")
+                continue
+        
+        print(f"✅ Debug: Fixed {fixed_count} fuel entries")
+        return {
+            "status": "success", 
+            "message": f"Fixed {fixed_count} fuel entries",
+            "fixed_count": fixed_count,
+            "total_entries": len(fuel_entries)
+        }
+        
+    except Exception as e:
+        print(f"❌ Debug: Error fixing fuel entries: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.get("/debug/rides-with-details")
