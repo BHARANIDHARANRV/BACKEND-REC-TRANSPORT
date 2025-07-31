@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException, status, Security
+from fastapi import FastAPI, Depends, HTTPException, status, Security, Request
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta, date as dt_date
 from typing import Optional, List
@@ -318,13 +318,10 @@ async def debug_fuel_entries():
                     "driver_name": user.name if user else "Unknown",
                     "vehicle_make": driver.vehicle_make if driver else "Unknown",
                     "license_plate": driver.license_plate if driver else "Unknown",
-                    "fuel_amount": entry.fuel_amount,
-                    "fuel_cost": entry.fuel_cost,
-                    "fuel_type": entry.fuel_type,
-                    "odometer_reading": entry.odometer_reading,
-                    "fuel_station": entry.fuel_station,
-                    "date": entry.date.isoformat() if entry.date else None,
-                    "created_at": entry.created_at.isoformat() if entry.created_at else None
+                    "fuel_amount": entry.amount,
+                    "fuel_cost": entry.cost,
+                    "fuel_station": entry.location,
+                    "date": entry.date.isoformat() if entry.date else None
                 }
                 fuel_list.append(fuel_data)
             except Exception as e:
@@ -527,11 +524,17 @@ async def create_driver(driver_data: dict, current_user: User = Depends(get_curr
     )
     await new_user.insert()
     
-    # Create driver profile (without vehicle info)
+    # Create driver profile with default vehicle values
     driver_profile = await Driver.create_driver(
         user_id=new_user.id,
         license_number=driver_data.get("license_number"),
         license_expiry=driver_data.get("license_expiry"),
+        # Default vehicle values (can be updated later)
+        vehicle_make=driver_data.get("vehicle_make", "Not Specified"),
+        vehicle_model=driver_data.get("vehicle_model", "Not Specified"),
+        vehicle_year=driver_data.get("vehicle_year", 2024),
+        license_plate=driver_data.get("license_plate", "Not Assigned"),
+        vehicle_color=driver_data.get("vehicle_color", "Not Specified"),
         rating=driver_data.get("rating", 5.0),
         total_rides=driver_data.get("total_rides", 0),
         current_km_reading=driver_data.get("current_km_reading", 0)
@@ -589,14 +592,25 @@ async def get_all_passengers(current_user: User = Depends(get_current_admin)):
     return response
 
 @app.put("/drivers/me/status")
-async def update_driver_status(status_data: dict, current_user: User = Depends(get_current_driver)):
+async def update_driver_status(
+    request: Request,
+    current_user: User = Depends(get_current_driver)
+):
     """Update driver online/offline status"""
     try:
         driver = await Driver.find_one({"user_id": current_user.id})
         if not driver:
             raise HTTPException(status_code=404, detail="Driver profile not found")
         
-        driver.is_online = status_data.get("is_online", False)
+        # Try to get data from JSON body first
+        try:
+            body_data = await request.json()
+            is_online = body_data.get("is_online", False)
+        except:
+            # If JSON parsing fails, try query parameters
+            is_online = request.query_params.get("is_online", "false").lower() == "true"
+        
+        driver.is_online = is_online
         await driver.save()
         
         return {"status": "success", "message": "Driver status updated", "driver": driver}
@@ -718,13 +732,10 @@ async def get_fuel_entries(current_user: User = Depends(get_current_admin)):
                     "driver_name": user.name if user else "Unknown",
                     "vehicle_make": driver.vehicle_make if driver else "Unknown",
                     "license_plate": driver.license_plate if driver else "Unknown",
-                    "fuel_amount": entry.fuel_amount,
-                    "fuel_cost": entry.fuel_cost,
-                    "fuel_type": entry.fuel_type,
-                    "odometer_reading": entry.odometer_reading,
-                    "fuel_station": entry.fuel_station,
-                    "date": entry.date.isoformat() if entry.date else None,
-                    "created_at": entry.created_at.isoformat() if entry.created_at else None
+                    "fuel_amount": entry.amount,
+                    "fuel_cost": entry.cost,
+                    "fuel_station": entry.location,
+                    "date": entry.date.isoformat() if entry.date else None
                 }
                 fuel_list.append(fuel_data)
             except Exception as e:
@@ -741,7 +752,7 @@ async def create_fuel_entry(fuel_data: dict, current_user: User = Depends(get_cu
     """Create a new fuel entry (admin only)"""
     try:
         # Validate required fields
-        required_fields = ["driver_id", "fuel_amount", "fuel_cost", "fuel_type", "odometer_reading"]
+        required_fields = ["driver_id", "fuel_amount", "fuel_cost"]
         for field in required_fields:
             if not fuel_data.get(field):
                 raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
@@ -758,12 +769,12 @@ async def create_fuel_entry(fuel_data: dict, current_user: User = Depends(get_cu
         
         fuel_entry = FuelEntry(
             driver_id=fuel_data["driver_id"],
-            fuel_amount=float(fuel_data["fuel_amount"]),
-            fuel_cost=float(fuel_data["fuel_cost"]),
-            fuel_type=fuel_data["fuel_type"],
-            odometer_reading=float(fuel_data["odometer_reading"]),
-            fuel_station=fuel_data.get("fuel_station", "Unknown"),
-            date=fuel_date
+            amount=float(fuel_data["fuel_amount"]),
+            cost=float(fuel_data["fuel_cost"]),
+            location=fuel_data.get("fuel_station", "Unknown"),
+            date=fuel_date,
+            added_by="admin",
+            admin_id=current_user.id
         )
         await fuel_entry.insert()
         
