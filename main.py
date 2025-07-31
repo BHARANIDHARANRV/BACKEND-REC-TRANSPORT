@@ -307,10 +307,15 @@ async def debug_fuel_entries():
         fuel_list = []
         for entry in fuel_entries:
             try:
-                driver = await Driver.get(entry.driver_id)
+                print(f"🔍 Debug: Processing fuel entry {entry.id} with driver_id: {entry.driver_id}")
+                
+                driver = await Driver.find_one({"_id": entry.driver_id})
+                print(f"🔍 Debug: Found driver: {driver.id if driver else 'None'}")
+                
                 user = None
                 if driver:
-                    user = await User.get(driver.user_id)
+                    user = await User.find_one({"_id": driver.user_id})
+                    print(f"🔍 Debug: Found user: {user.name if user else 'None'}")
                 
                 fuel_data = {
                     "id": str(entry.id),
@@ -736,10 +741,16 @@ async def get_fuel_entries(current_user: User = Depends(get_current_admin)):
         fuel_list = []
         for entry in fuel_entries:
             try:
-                driver = await Driver.get(entry.driver_id)
+                print(f"🔍 Processing fuel entry {entry.id} with driver_id: {entry.driver_id}")
+                
+                # Use find_one instead of get for better MongoDB compatibility
+                driver = await Driver.find_one({"_id": entry.driver_id})
+                print(f"🔍 Found driver: {driver.id if driver else 'None'}")
+                
                 user = None
                 if driver:
-                    user = await User.get(driver.user_id)
+                    user = await User.find_one({"_id": driver.user_id})
+                    print(f"🔍 Found user: {user.name if user else 'None'}")
                 
                 fuel_data = {
                     "id": str(entry.id),
