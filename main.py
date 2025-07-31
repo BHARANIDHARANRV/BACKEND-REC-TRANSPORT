@@ -685,15 +685,28 @@ async def get_all_passengers(current_user: User = Depends(get_current_admin)):
 async def get_current_passenger_profile(current_user: User = Depends(get_current_user)):
     """Get current passenger's profile (for passengers to find their profile ID)"""
     try:
+        print(f"🔍 Passenger /me endpoint called for user: {current_user.id}, role: {current_user.role}")
+        
         if current_user.role != "passenger":
+            print(f"❌ User {current_user.id} is not a passenger (role: {current_user.role})")
             raise HTTPException(status_code=403, detail="Only passengers can access this endpoint")
         
+        print(f"🔍 Looking for passenger with user_id: {current_user.id}")
         passenger = await Passenger.find_one({"user_id": current_user.id})
+        
         if not passenger:
+            print(f"❌ No passenger profile found for user_id: {current_user.id}")
+            # Let's check if there are any passengers at all
+            all_passengers = await Passenger.find_all().to_list()
+            print(f"🔍 Total passengers in database: {len(all_passengers)}")
+            for p in all_passengers:
+                print(f"🔍 Passenger: {p.id}, user_id: {p.user_id}")
             raise HTTPException(status_code=404, detail="Passenger profile not found")
         
+        print(f"✅ Found passenger profile: {passenger.id}")
         return {"status": "success", "passenger": passenger}
     except Exception as e:
+        print(f"❌ Error in /passengers/me: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get passenger profile: {str(e)}")
 
 @app.put("/drivers/me/status")
@@ -1205,10 +1218,10 @@ async def get_attendance(
                     "driver_id": str(record.driver_id),
                     "driver_name": user.name if user else "Unknown",
                     "date": record.date.isoformat() if record.date else None,
-                    "check_in_time": record.check_in_time.isoformat() if record.check_in_time else None,
-                    "check_out_time": record.check_out_time.isoformat() if record.check_out_time else None,
-                    "status": record.status.value if record.status else "unknown",
-                    "notes": record.notes
+                    "check_in_time": record.check_in.isoformat() if record.check_in else None,
+                    "check_out_time": record.check_out.isoformat() if record.check_out else None,
+                    "status": record.status,
+                    "notes": record.notes if hasattr(record, 'notes') else None
                 }
                 attendance_list.append(attendance_data)
             except Exception as e:
@@ -1252,10 +1265,9 @@ async def create_attendance(attendance_data: dict, current_user: User = Depends(
         attendance = DriverAttendance(
             driver_id=attendance_data["driver_id"],
             date=date_obj,
-            check_in_time=attendance_data.get("check_in_time"),
-            check_out_time=attendance_data.get("check_out_time"),
-            status=attendance_data.get("status", "present"),
-            notes=attendance_data.get("notes")
+            check_in=attendance_data.get("check_in_time"),
+            check_out=attendance_data.get("check_out_time"),
+            status=attendance_data.get("status", "present")
         )
         
         await attendance.insert()
@@ -1267,7 +1279,7 @@ async def create_attendance(attendance_data: dict, current_user: User = Depends(
                 "id": str(attendance.id),
                 "driver_id": str(attendance.driver_id),
                 "date": attendance.date.isoformat() if attendance.date else None,
-                "status": attendance.status.value if attendance.status else "unknown"
+                "status": attendance.status
             }
         }
     except Exception as e:
@@ -1288,13 +1300,11 @@ async def update_attendance(
         
         # Update fields
         if "check_in_time" in attendance_data:
-            attendance.check_in_time = attendance_data["check_in_time"]
+            attendance.check_in = attendance_data["check_in_time"]
         if "check_out_time" in attendance_data:
-            attendance.check_out_time = attendance_data["check_out_time"]
+            attendance.check_out = attendance_data["check_out_time"]
         if "status" in attendance_data:
             attendance.status = attendance_data["status"]
-        if "notes" in attendance_data:
-            attendance.notes = attendance_data["notes"]
         
         await attendance.save()
         
@@ -1305,7 +1315,7 @@ async def update_attendance(
                 "id": str(attendance.id),
                 "driver_id": str(attendance.driver_id),
                 "date": attendance.date.isoformat() if attendance.date else None,
-                "status": attendance.status.value if attendance.status else "unknown"
+                "status": attendance.status
             }
         }
     except Exception as e:
@@ -1353,10 +1363,10 @@ async def debug_attendance():
                     "driver_id": str(record.driver_id),
                     "driver_name": user.name if user else "Unknown",
                     "date": record.date.isoformat() if record.date else None,
-                    "check_in_time": record.check_in_time.isoformat() if record.check_in_time else None,
-                    "check_out_time": record.check_out_time.isoformat() if record.check_out_time else None,
-                    "status": record.status.value if record.status else "unknown",
-                    "notes": record.notes
+                    "check_in_time": record.check_in.isoformat() if record.check_in else None,
+                    "check_out_time": record.check_out.isoformat() if record.check_out else None,
+                    "status": record.status,
+                    "notes": record.notes if hasattr(record, 'notes') else None
                 }
                 attendance_list.append(attendance_data)
             except Exception as e:
@@ -1370,6 +1380,41 @@ async def debug_attendance():
         }
     except Exception as e:
         print(f"❌ Error fetching attendance: {e}")
+        return {"status": "error", "message": str(e)}
+
+# Debug endpoint to check user authentication
+@app.get("/debug/user-auth")
+async def debug_user_auth(current_user: User = Depends(get_current_user)):
+    """Debug endpoint to check current user authentication and role"""
+    try:
+        print(f"🔍 Debug user-auth called for user: {current_user.id}")
+        print(f"🔍 User role: {current_user.role}")
+        print(f"🔍 User name: {current_user.name}")
+        print(f"🔍 User email: {current_user.email}")
+        
+        # Check if user has corresponding profile
+        if current_user.role == "passenger":
+            passenger = await Passenger.find_one({"user_id": current_user.id})
+            print(f"🔍 Passenger profile found: {passenger is not None}")
+            if passenger:
+                print(f"🔍 Passenger ID: {passenger.id}")
+        elif current_user.role == "driver":
+            driver = await Driver.find_one({"user_id": current_user.id})
+            print(f"🔍 Driver profile found: {driver is not None}")
+            if driver:
+                print(f"🔍 Driver ID: {driver.id}")
+        
+        return {
+            "status": "success",
+            "user": {
+                "id": current_user.id,
+                "name": current_user.name,
+                "email": current_user.email,
+                "role": current_user.role
+            }
+        }
+    except Exception as e:
+        print(f"❌ Error in debug user-auth: {e}")
         return {"status": "error", "message": str(e)}
 
 # Debug passenger rides endpoint
@@ -1393,8 +1438,15 @@ async def debug_passenger_rides(passenger_id: str):
         if passenger:
             passenger_user = await User.find_one({"_id": passenger.user_id})
             print(f"🔍 Debug: Passenger found - {passenger_user.name if passenger_user else 'Unknown'}")
+            print(f"🔍 Debug: Passenger user_id: {passenger.user_id}")
+            print(f"🔍 Debug: Passenger user found: {passenger_user is not None}")
         else:
             print(f"🔍 Debug: Passenger not found for ID: {passenger_id}")
+            # Let's check all passengers to see what's available
+            all_passengers = await Passenger.find_all().to_list()
+            print(f"🔍 Debug: Total passengers in database: {len(all_passengers)}")
+            for p in all_passengers:
+                print(f"🔍 Debug: Available passenger: {p.id}, user_id: {p.user_id}")
         
         # Format rides for response
         rides_list = []
