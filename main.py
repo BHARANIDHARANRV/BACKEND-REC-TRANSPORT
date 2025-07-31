@@ -187,6 +187,12 @@ async def debug_drivers():
                 continue
         
         print(f"✅ Debug: Found {len(driver_list)} drivers")
+        
+        # Log online status summary
+        online_count = sum(1 for driver in driver_list if driver.get("is_online", False))
+        offline_count = len(driver_list) - online_count
+        print(f"📊 Online drivers: {online_count}, Offline drivers: {offline_count}")
+        
         return {"status": "success", "drivers": driver_list}
     except Exception as e:
         print(f"❌ Debug: Error fetching drivers: {e}")
@@ -704,6 +710,7 @@ async def get_current_passenger_profile(current_user: User = Depends(get_current
             raise HTTPException(status_code=404, detail="Passenger profile not found")
         
         print(f"✅ Found passenger profile: {passenger.id}")
+        print(f"🔍 Passenger object structure: {passenger}")
         return {"status": "success", "passenger": passenger}
     except Exception as e:
         print(f"❌ Error in /passengers/me: {e}")
@@ -716,23 +723,31 @@ async def update_driver_status(
 ):
     """Update driver online/offline status"""
     try:
+        print(f"🔍 Driver status update requested for user: {current_user.id}")
+        
         driver = await Driver.find_one({"user_id": current_user.id})
         if not driver:
+            print(f"❌ Driver profile not found for user: {current_user.id}")
             raise HTTPException(status_code=404, detail="Driver profile not found")
         
         # Try to get data from JSON body first
         try:
             body_data = await request.json()
             is_online = body_data.get("is_online", False)
+            print(f"🔍 Status from JSON body: {is_online}")
         except:
             # If JSON parsing fails, try query parameters
             is_online = request.query_params.get("is_online", "false").lower() == "true"
+            print(f"🔍 Status from query params: {is_online}")
         
+        print(f"🔍 Updating driver {driver.id} status from {driver.is_online} to {is_online}")
         driver.is_online = is_online
         await driver.save()
         
+        print(f"✅ Driver status updated successfully: {driver.is_online}")
         return {"status": "success", "message": "Driver status updated", "driver": driver}
     except Exception as e:
+        print(f"❌ Error updating driver status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update driver status: {str(e)}")
 
 @app.get("/drivers/me")
