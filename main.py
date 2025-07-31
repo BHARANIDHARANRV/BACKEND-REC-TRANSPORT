@@ -816,8 +816,8 @@ async def get_rides(passenger_id: Optional[str] = None, driver_id: Optional[str]
     passenger_ids = [ride.passenger_id for ride in rides if ride.passenger_id]
 
     # Fetch drivers and passengers
-    drivers = {d.id: d async for d in Driver.find({"id": {"$in": driver_ids}})}
-    passengers = {p.id: p async for p in Passenger.find({"id": {"$in": passenger_ids}})}
+    drivers = {d.id: d async for d in Driver.find({"_id": {"$in": driver_ids}})}
+    passengers = {p.id: p async for p in Passenger.find({"_id": {"$in": passenger_ids}})}
 
     # Fetch all user IDs
     user_ids = [d.user_id for d in drivers.values()] + [p.user_id for p in passengers.values()]
