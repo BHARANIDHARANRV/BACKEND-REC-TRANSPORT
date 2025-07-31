@@ -591,6 +591,21 @@ async def get_all_passengers(current_user: User = Depends(get_current_admin)):
         response.append(passenger_dict)
     return response
 
+@app.get("/passengers/me")
+async def get_current_passenger_profile(current_user: User = Depends(get_current_user)):
+    """Get current passenger's profile (for passengers to find their profile ID)"""
+    try:
+        if current_user.role != "passenger":
+            raise HTTPException(status_code=403, detail="Only passengers can access this endpoint")
+        
+        passenger = await Passenger.find_one({"user_id": current_user.id})
+        if not passenger:
+            raise HTTPException(status_code=404, detail="Passenger profile not found")
+        
+        return {"status": "success", "passenger": passenger}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get passenger profile: {str(e)}")
+
 @app.put("/drivers/me/status")
 async def update_driver_status(
     request: Request,
