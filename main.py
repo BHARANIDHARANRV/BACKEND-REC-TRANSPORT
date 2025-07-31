@@ -1432,6 +1432,53 @@ async def debug_user_auth(current_user: User = Depends(get_current_user)):
         print(f"❌ Error in debug user-auth: {e}")
         return {"status": "error", "message": str(e)}
 
+@app.post("/debug/create-admin")
+async def debug_create_admin(admin_data: dict):
+    """Create an admin user without authentication (for testing)"""
+    try:
+        print(f"🔧 Debug: Creating admin with data: {admin_data}")
+        
+        # Check if user with this email already exists
+        existing_user = await User.find_one({"email": admin_data.get("email")})
+        if existing_user:
+            return {"status": "error", "message": "User with this email already exists"}
+        
+        # Create admin user
+        new_user = User(
+            name=admin_data.get("name", "Admin User"),
+            email=admin_data.get("email"),
+            phone=admin_data.get("phone", "+1234567890"),
+            role="admin",
+            password_hash=get_password_hash(admin_data.get("password", "password"))
+        )
+        await new_user.insert()
+        
+        # Create admin profile
+        admin_profile = Admin(
+            user_id=new_user.id,
+            permissions=admin_data.get("permissions", '["view_all", "manage_drivers", "manage_rides", "manage_passengers"]')
+        )
+        await admin_profile.insert()
+        
+        print(f"✅ Debug: Admin created successfully - {new_user.name}")
+        return {
+            "status": "success",
+            "message": "Admin created successfully!",
+            "admin": {
+                "id": admin_profile.id,
+                "user_id": admin_profile.user_id,
+                "user": {
+                    "id": new_user.id,
+                    "name": new_user.name,
+                    "email": new_user.email,
+                    "role": new_user.role
+                }
+            }
+        }
+    except Exception as e:
+        print(f"❌ Debug: Error creating admin: {e}")
+        return {"status": "error", "message": str(e)}
+
 # Debug passenger rides endpoint
 @app.get("/debug/passenger-rides/{passenger_id}")
 async def debug_passenger_rides(passenger_id: str):
