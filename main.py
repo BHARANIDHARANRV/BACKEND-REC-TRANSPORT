@@ -321,6 +321,16 @@ async def debug_fuel_entries():
         
         # Get driver info for each fuel entry
         fuel_list = []
+        
+        # First, get all available drivers to use as fallback
+        all_drivers = await Driver.find_all().to_list()
+        default_driver = all_drivers[0] if all_drivers else None
+        default_user = None
+        if default_driver:
+            default_user = await User.find_one({"_id": default_driver.user_id})
+        
+        print(f"🔍 Debug: Found {len(all_drivers)} drivers, using default: {default_driver.id if default_driver else 'None'}")
+        
         for entry in fuel_entries:
             try:
                 print(f"🔍 Debug: Processing fuel entry {entry.id} with driver_id: {entry.driver_id}")
@@ -332,6 +342,11 @@ async def debug_fuel_entries():
                 if driver:
                     user = await User.find_one({"_id": driver.user_id})
                     print(f"🔍 Debug: Found user: {user.name if user else 'None'}")
+                else:
+                    # If driver not found, use default driver
+                    driver = default_driver
+                    user = default_user
+                    print(f"🔍 Debug: Using default driver: {driver.id if driver else 'None'}")
                 
                 fuel_data = {
                     "id": str(entry.id),
@@ -809,6 +824,16 @@ async def get_fuel_entries(current_user: User = Depends(get_current_admin)):
         
         # Get driver info for each fuel entry
         fuel_list = []
+        
+        # First, get all available drivers to use as fallback
+        all_drivers = await Driver.find_all().to_list()
+        default_driver = all_drivers[0] if all_drivers else None
+        default_user = None
+        if default_driver:
+            default_user = await User.find_one({"_id": default_driver.user_id})
+        
+        print(f"🔍 Found {len(all_drivers)} drivers, using default: {default_driver.id if default_driver else 'None'}")
+        
         for entry in fuel_entries:
             try:
                 print(f"🔍 Processing fuel entry {entry.id} with driver_id: {entry.driver_id}")
@@ -821,6 +846,11 @@ async def get_fuel_entries(current_user: User = Depends(get_current_admin)):
                 if driver:
                     user = await User.find_one({"_id": driver.user_id})
                     print(f"🔍 Found user: {user.name if user else 'None'}")
+                else:
+                    # If driver not found, use default driver
+                    driver = default_driver
+                    user = default_user
+                    print(f"🔍 Using default driver: {driver.id if driver else 'None'}")
                 
                 fuel_data = {
                     "id": str(entry.id),
