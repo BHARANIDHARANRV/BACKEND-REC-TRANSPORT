@@ -937,6 +937,55 @@ async def create_fuel_entry(fuel_data: dict, current_user: User = Depends(get_cu
         print(f"❌ Error creating fuel entry: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create fuel entry: {str(e)}")
 
+@app.post("/fuel-entries/me")
+async def create_my_fuel_entry(fuel_data: dict, current_user: User = Depends(get_current_driver)):
+    """Create a new fuel entry for the current driver"""
+    try:
+        print(f"🔧 Creating fuel entry for driver: {current_user.id}")
+        print(f"🔧 Fuel data received: {fuel_data}")
+        
+        # Validate required fields
+        required_fields = ["amount", "cost", "location"]
+        for field in required_fields:
+            if not fuel_data.get(field):
+                print(f"❌ Missing required field: {field}")
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        # Get the driver record for this user
+        driver = await Driver.find_one({"user_id": current_user.id})
+        if not driver:
+            print(f"❌ Driver profile not found for user: {current_user.id}")
+            raise HTTPException(status_code=404, detail="Driver profile not found")
+        
+        print(f"🔧 Found driver: {driver.id}")
+        
+        # Parse date if provided
+        fuel_date = fuel_data.get("date")
+        if fuel_date and isinstance(fuel_date, str):
+            try:
+                fuel_date = datetime.strptime(fuel_date, "%Y-%m-%d")
+            except:
+                fuel_date = datetime.utcnow()
+        else:
+            fuel_date = datetime.utcnow()
+        
+        fuel_entry = FuelEntry(
+            driver_id=str(driver.id),
+            amount=float(fuel_data["amount"]),
+            cost=float(fuel_data["cost"]),
+            location=fuel_data["location"],
+            date=fuel_date,
+            added_by="driver",
+            admin_id=current_user.id
+        )
+        await fuel_entry.insert()
+        
+        print(f"✅ Fuel entry created successfully: {fuel_entry.id}")
+        return {"status": "success", "fuel_entry": fuel_entry}
+    except Exception as e:
+        print(f"❌ Error creating fuel entry: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create fuel entry: {str(e)}")
+
 # Ride management
 @app.post("/rides")
 async def create_ride(ride_data: dict):
